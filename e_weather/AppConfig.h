@@ -27,7 +27,7 @@ struct Config {
   char static_ip[16] = "";
   char static_gw[16] = "";
   char static_mask[16] = "255.255.255.0";
-  char static_dns[16] = "8.8.8.8";
+  char static_dns[16] = "114.114.114.114";
 };
 
 enum Page {
