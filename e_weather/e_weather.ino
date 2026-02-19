@@ -230,8 +230,8 @@ void loadConfig() {
           strlcpy(config.mqtt_calendar_topic, doc["mqtt_calendar_topic"] | "epd/calendar", sizeof(config.mqtt_calendar_topic));
           strlcpy(config.mqtt_shift_topic, doc["mqtt_shift_topic"] | "epd/shift", sizeof(config.mqtt_shift_topic));
           strlcpy(config.mqtt_air_quality_topic, doc["mqtt_air_quality_topic"] | "epd/air_quality", sizeof(config.mqtt_air_quality_topic));
-          strlcpy(config.ntp_server, doc["ntp_server"] | "ntp1.aliyun.com", sizeof(config.ntp_server));
-          strlcpy(config.ntp_server_2, doc["ntp_server_2"] | "ntp2.aliyun.com", sizeof(config.ntp_server_2));
+          strlcpy(config.ntp_server, doc["ntp_server"] | "ntp.aliyun.com", sizeof(config.ntp_server));
+          strlcpy(config.ntp_server_2, doc["ntp_server_2"] | "ntp.tencent.com", sizeof(config.ntp_server_2));
           config.full_refresh_period = doc["full_refresh_period"] | 0;
           config.day_start_hour = doc["day_start_hour"] | 6;
           config.day_end_hour = doc["day_end_hour"] | 18;
@@ -1934,7 +1934,7 @@ void setup() {
   if (strlen(config.ntp_server) > 0) {
       timeClient.setPoolServerName(config.ntp_server);
   } else {
-      timeClient.setPoolServerName("ntp1.aliyun.com");
+      timeClient.setPoolServerName("ntp.aliyun.com");
   }
   timeClient.setTimeOffset(28800);
   timeClient.begin();
@@ -1973,8 +1973,8 @@ void setup() {
           Serial.println("MQTT Connected! AP Disabled.");
           
           // Setup NTP (Only after MQTT is connected)
-          const char* ntp1 = (strlen(config.ntp_server) > 0) ? config.ntp_server : "ntp1.aliyun.com";
-          const char* ntp2 = (strlen(config.ntp_server_2) > 0) ? config.ntp_server_2 : "ntp2.aliyun.com";
+          const char* ntp1 = (strlen(config.ntp_server) > 0) ? config.ntp_server : "ntp.aliyun.com";
+          const char* ntp2 = (strlen(config.ntp_server_2) > 0) ? config.ntp_server_2 : "ntp.tencent.com";
           
           timeClient.setPoolServerName(ntp1);
           timeClient.setTimeOffset(28800);
@@ -2233,8 +2233,8 @@ void loop() {
                        ntpRetryCount = 0;
                        usingSecondaryNtp = !usingSecondaryNtp;
                        
-                       const char* ntp1 = (strlen(config.ntp_server) > 0) ? config.ntp_server : "ntp1.aliyun.com";
-                       const char* ntp2 = (strlen(config.ntp_server_2) > 0) ? config.ntp_server_2 : "ntp2.aliyun.com";
+                       const char* ntp1 = (strlen(config.ntp_server) > 0) ? config.ntp_server : "ntp.aliyun.com";
+                       const char* ntp2 = (strlen(config.ntp_server_2) > 0) ? config.ntp_server_2 : "ntp.tencent.com";
                        const char* nextServer = usingSecondaryNtp ? ntp2 : ntp1;
                        
                        Serial.printf("NTP Failed 3 times. Switching to: %s\n", nextServer);
