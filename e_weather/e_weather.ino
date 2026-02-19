@@ -887,15 +887,15 @@ void displayWeatherDashboard(bool partial_update = false) {
         u8g2.setBackgroundColor(0);
 
         // --- Layout ---
-        // 顶部垂直分割线 (x=200, y=10-150)
-        paint_gfx.drawFastVLine(200, 10, 140, 1); 
+        // 顶部垂直分割线 (x=200, y=5-145)
+        paint_gfx.drawFastVLine(200, 5, 135, 1); 
         
         // === LEFT SIDE (Date & Time) ===
         u8g2.setFont(u8g2_font_logisoso50_tf); 
         String timeStr = timeClient.getFormattedTime().substring(0, 5); 
         int tWidth = u8g2.getUTF8Width(timeStr.c_str());
         int timeX = 100 - (tWidth / 2);
-        u8g2.drawUTF8(timeX, 70, timeStr.c_str());
+        u8g2.drawUTF8(timeX, 65, timeStr.c_str());
         
         // Check for today's event and draw bell icon
         // Only trigger for Calendar Events (Schedule), NOT Shifts
@@ -920,12 +920,12 @@ void displayWeatherDashboard(bool partial_update = false) {
         
         if (hasEvent) {
               // Draw bell icon to the left of time
-              // Time is at timeX, y=70 (baseline). Font height ~50.
-              // Center roughly at y=45. Icon is 20x20.
+              // Time is at timeX, y=65 (baseline). Font height ~50.
+              // Center roughly at y=40. Icon is 20x20.
               // drawIconFromProgmem(data, x, y, w, h, scale)
-              // Adjusted for 20x20 size (was 16x16 at 38) -> 38-2 = 36
+              // Adjusted for 20x20 size (was 16x16 at 38) -> 38-5-2 = 31
               // X was timeX - 25 -> timeX - 27
-              drawIconFromProgmem(gImage_bell, timeX - 27, 36, 20, 20, 1);
+              drawIconFromProgmem(gImage_bell, timeX - 27, 31, 20, 20, 1);
          }
         
         if (solarDate.length() > 0) {
@@ -933,14 +933,14 @@ void displayWeatherDashboard(bool partial_update = false) {
             String fullDate = solarDate;
             if (weekDay.length() > 0) fullDate += " " + weekDay;
             int sdWidth = u8g2.getUTF8Width(fullDate.c_str());
-            u8g2.drawUTF8(100 - (sdWidth / 2), 95, fullDate.c_str());
+            u8g2.drawUTF8(100 - (sdWidth / 2), 90, fullDate.c_str());
             
             u8g2.setFont(u8g2_font_wqy12_t_gb2312);
             int ldWidth = u8g2.getUTF8Width(lunarDate.c_str());
-            u8g2.drawUTF8(100 - (ldWidth / 2), 120, lunarDate.c_str());
+            u8g2.drawUTF8(100 - (ldWidth / 2), 115, lunarDate.c_str());
             
             int tiWidth = u8g2.getUTF8Width(termInfo.c_str());
-            u8g2.drawUTF8(100 - (tiWidth / 2), 140, termInfo.c_str());
+            u8g2.drawUTF8(100 - (tiWidth / 2), 135, termInfo.c_str());
         }
 
         // === RIGHT SIDE (Today's Weather) ===
@@ -962,12 +962,12 @@ void displayWeatherDashboard(bool partial_update = false) {
                 // Check for Large icon first (-L)
                 String iconPathL = "/icons/" + iconCode + "-L.bmp";
                 if (LittleFS.exists(iconPathL)) {
-                    drawBmp(iconPathL, iconX, 30, 1); 
+                    drawBmp(iconPathL, iconX, 25, 1); 
                     iconDrawn = true;
                 } else {
                     String iconPath = "/icons/" + iconCode + ".bmp";
                     if (LittleFS.exists(iconPath)) {
-                        drawBmp(iconPath, iconX, 30, 2); 
+                        drawBmp(iconPath, iconX, 25, 2); 
                         iconDrawn = true;
                     }
                 }
@@ -978,14 +978,14 @@ void displayWeatherDashboard(bool partial_update = false) {
                  const unsigned char* iconDataL = getIconData(iconCode + "-L");
                  if (iconDataL) {
                      // Assume Large icon is 72x72 (User specified)
-                     drawIconFromProgmem(iconDataL, iconX - 4, 30, 72, 72, 1); 
+                     drawIconFromProgmem(iconDataL, iconX - 4, 25, 72, 72, 1); 
                      iconDrawn = true;
                  } else {
                      // Fallback to standard icon
                      const unsigned char* iconData = getIconData(iconCode);
                      if (iconData) {
                          // Data is 36x36, render full size to avoid cropping
-                         drawIconFromProgmem(iconData, iconX, 30, 36, 36, 2); // Scale 2x (72x72)
+                         drawIconFromProgmem(iconData, iconX, 25, 36, 36, 2); // Scale 2x (72x72)
                          iconDrawn = true;
                      }
                  }
@@ -993,7 +993,7 @@ void displayWeatherDashboard(bool partial_update = false) {
             if (!iconDrawn) {
                 u8g2.setFont(u8g2_font_open_iconic_weather_6x_t);
                 char iconStr[2] = {getIconChar(condText), 0};
-                u8g2.drawUTF8(iconX + 12, 78, iconStr);
+                u8g2.drawUTF8(iconX + 12, 73, iconStr);
             }
             
             // 2. 温度显示 (高温/低温)
@@ -1003,17 +1003,17 @@ void displayWeatherDashboard(bool partial_update = false) {
             if (slashIndex > 0) {
                 String highTemp = tempStr.substring(0, slashIndex);
                 String lowTemp = tempStr.substring(slashIndex + 1);
-                int sx1 = textCenterX - 5, sy1 = 68, sx2 = textCenterX + 15, sy2 = 35;
+                int sx1 = textCenterX - 5, sy1 = 63, sx2 = textCenterX + 15, sy2 = 30;
                 int thickness = 4; 
                 for(int k = -(thickness/2); k < (thickness/2); k++) {
                       paint_gfx.drawLine(sx1 + k, sy1, sx2 + k, sy2, 1);
                 }
                 int hW = u8g2.getUTF8Width(highTemp.c_str());
-                u8g2.drawUTF8(sx1 - hW + 4, 55, highTemp.c_str()); 
-                u8g2.drawUTF8(sx2 - 14, 100, lowTemp.c_str());
+                u8g2.drawUTF8(sx1 - hW + 4, 50, highTemp.c_str()); 
+                u8g2.drawUTF8(sx2 - 14, 95, lowTemp.c_str());
             } else {
                  int tW = u8g2.getUTF8Width(tempStr.c_str());
-                 u8g2.drawUTF8(textCenterX - (tW / 2), 75, tempStr.c_str());
+                 u8g2.drawUTF8(textCenterX - (tW / 2), 70, tempStr.c_str());
             }
             
             // 3. 合并：天气文本 + 风向风速 (同一行)
@@ -1046,7 +1046,7 @@ void displayWeatherDashboard(bool partial_update = false) {
             int totalW = wdW1 + gap + wdW2 + wdW3;
             
             int wdX = panelCenterX - (totalW / 2); // 以右侧面板中心居中
-            int wdY = 120; // Align with lunar date (y=120)
+            int wdY = 115; // Align with lunar date (y=120 -> 115)
             
             // 绘制第一部分 
             u8g2.drawUTF8(wdX, wdY, weatherDetailPart1.c_str());
@@ -1077,7 +1077,7 @@ void displayWeatherDashboard(bool partial_update = false) {
                  
                  int totalInW = inW1 + inGap + inW2;
                  int inX = panelCenterX - (totalInW / 2);
-                 int inY = 140; // Align with solar term (y=140)
+                 int inY = 135; // Align with solar term (y=140 -> 135)
                  
                  // 垂直对齐：固定在底部 153 位置
                  u8g2.drawUTF8(inX, inY, envPart1.c_str()); 
@@ -1086,10 +1086,10 @@ void displayWeatherDashboard(bool partial_update = false) {
         }
         
         // 分割线
-        paint_gfx.drawFastHLine(0, 160, EPD_4IN2_WIDTH, 2); 
+        paint_gfx.drawFastHLine(0, 155, EPD_4IN2_WIDTH, 2); 
 
         // === 底部 6 天预报 ===
-        int startY = 160;
+        int startY = 155;
         
         // 1. Pre-calculate Min/Max for scaling
         int minTemp = 100, maxTemp = -100;
@@ -1180,7 +1180,7 @@ void displayWeatherDashboard(bool partial_update = false) {
                 u8g2.drawUTF8(centerX - 16, startY + 132, nightIconStr); // 104+28 approx
             }
 
-            if (i < 6) paint_gfx.drawFastVLine(x2, 160, 140, 1);
+            // Separator line removed
         }
         
         // 4. Draw Curves
@@ -1908,7 +1908,7 @@ void setup() {
 
       } else {
           Serial.println("WiFi Timeout. Enabling AP.");
-          WiFi.mode(WIFI_AP_STA);
+          WiFi.mode(WIFI_AP);
       }
   } else {
       WiFi.mode(WIFI_AP);
