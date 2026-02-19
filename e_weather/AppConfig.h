@@ -21,6 +21,13 @@ struct Config {
   int day_start_hour = 6;
   int day_end_hour = 18;
   bool invert_display = false;
+  
+  // Static IP Configuration
+  bool use_static_ip = false;
+  char static_ip[16] = "";
+  char static_gw[16] = "";
+  char static_mask[16] = "255.255.255.0";
+  char static_dns[16] = "8.8.8.8";
 };
 
 enum Page {

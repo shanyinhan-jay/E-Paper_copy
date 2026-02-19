@@ -160,6 +160,17 @@ const char INDEX_HTML_TEMPLATE[] PROGMEM = R"rawliteral(
             <input type='text' name='wifi_ssid' value='%WIFI_SSID%' placeholder="SSID">
             <input type='password' name='wifi_pass' value='%WIFI_PASS%' placeholder="Password">
         </div>
+
+        <h3>Static IP (Optional)</h3>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;margin-bottom:10px;">
+             <input type="checkbox" name="use_static_ip" value="1" %USE_STATIC_IP% style="width:auto;margin:0;"> Enable Static IP
+        </label>
+        <div class="grid-2-col">
+            <input type='text' name='static_ip' value='%STATIC_IP%' placeholder="IP Address">
+            <input type='text' name='static_gw' value='%STATIC_GW%' placeholder="Gateway">
+            <input type='text' name='static_mask' value='%STATIC_MASK%' placeholder="Subnet Mask">
+            <input type='text' name='static_dns' value='%STATIC_DNS%' placeholder="DNS Server">
+        </div>
         
         <h3>MQTT Broker</h3>
         <div class="grid-2-col">

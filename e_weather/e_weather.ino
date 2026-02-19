@@ -35,8 +35,9 @@
 #include <OneButton.h>
 #include <vector>
 
+extern const uint8_t u8g2_font_wqy12_t_gb2312[] U8X8_PROGMEM;
 // extern const uint8_t u8g2_font_wqy16_t_gb2312[] U8X8_PROGMEM;
-extern const uint8_t u8g2_font_wqy14_t_gb2312[] U8X8_PROGMEM; 
+// extern const uint8_t u8g2_font_wqy14_t_gb2312[] U8X8_PROGMEM; 
 extern const uint8_t u8g2_font_open_iconic_weather_6x_t[] U8X8_PROGMEM;
 extern const uint8_t u8g2_font_open_iconic_weather_4x_t[] U8X8_PROGMEM;
 extern const uint8_t u8g2_font_logisoso60_tf[] U8X8_PROGMEM;
@@ -188,6 +189,16 @@ public:
       }
     }
   }
+
+  void fillCircle(int16_t x0, int16_t y0, int16_t r, uint16_t color) {
+      for(int16_t y = -r; y <= r; y++) {
+          for(int16_t x = -r; x <= r; x++) {
+              if(x*x + y*y <= r*r) {
+                  drawPixel(x0+x, y0+y, color);
+              }
+          }
+      }
+  }
 };
 
 Paint_GFX paint_gfx;
@@ -225,6 +236,12 @@ void loadConfig() {
           config.day_start_hour = doc["day_start_hour"] | 6;
           config.day_end_hour = doc["day_end_hour"] | 18;
           config.invert_display = doc["invert_display"] | false;
+          
+          config.use_static_ip = doc["use_static_ip"] | false;
+          strlcpy(config.static_ip, doc["static_ip"] | "", sizeof(config.static_ip));
+          strlcpy(config.static_gw, doc["static_gw"] | "", sizeof(config.static_gw));
+          strlcpy(config.static_mask, doc["static_mask"] | "255.255.255.0", sizeof(config.static_mask));
+          strlcpy(config.static_dns, doc["static_dns"] | "114.114.114.114", sizeof(config.static_dns));
         }
       }
     }
@@ -265,6 +282,12 @@ void saveConfig() {
   doc["day_start_hour"] = config.day_start_hour;
   doc["day_end_hour"] = config.day_end_hour;
   doc["invert_display"] = config.invert_display;
+  
+  doc["use_static_ip"] = config.use_static_ip;
+  doc["static_ip"] = config.static_ip;
+  doc["static_gw"] = config.static_gw;
+  doc["static_mask"] = config.static_mask;
+  doc["static_dns"] = config.static_dns;
 
   File configFile = LittleFS.open("/config.json", "w");
   if (!configFile) {
@@ -307,7 +330,8 @@ void displayMessage(String text) {
         int logicalHeight = EPD_4IN2_HEIGHT / scale;
         
         // u8g2.setFont(u8g2_font_wqy16_t_gb2312); // Use WenQuanYi 16pt GB2312 font
-        u8g2.setFont(u8g2_font_wqy14_t_gb2312); // Use WenQuanYi 14pt GB2312 font
+        // u8g2.setFont(u8g2_font_wqy14_t_gb2312); // Use WenQuanYi 14pt GB2312 font
+        u8g2.setFont(u8g2_font_wqy12_t_gb2312); // Use WenQuanYi 12pt GB2312 font
         u8g2.setFontMode(1); // Transparent mode
         u8g2.setForegroundColor(1); // Black
         u8g2.setBackgroundColor(0); // White
@@ -905,7 +929,7 @@ void displayWeatherDashboard(bool partial_update = false) {
          }
         
         if (solarDate.length() > 0) {
-            u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+            u8g2.setFont(u8g2_font_wqy12_t_gb2312);
             String fullDate = solarDate;
             if (weekDay.length() > 0) fullDate += " " + weekDay;
             int sdWidth = u8g2.getUTF8Width(fullDate.c_str());
@@ -1006,7 +1030,7 @@ void displayWeatherDashboard(bool partial_update = false) {
             // 构建第一部分：天气 + 空格 + 风向 + 风速数值
             String weatherDetailPart1 = condText + "  " + windDirPart + windScPart;
 
-            u8g2.setFont(u8g2_font_wqy14_t_gb2312);
+            u8g2.setFont(u8g2_font_wqy12_t_gb2312); // Use wqy12
             int wdW1 = u8g2.getUTF8Width(weatherDetailPart1.c_str());
             int wdW2 = (jiPart.length() > 0) ? u8g2.getUTF8Width(jiPart.c_str()) : 0;
             
@@ -1022,7 +1046,7 @@ void displayWeatherDashboard(bool partial_update = false) {
             int totalW = wdW1 + gap + wdW2 + wdW3;
             
             int wdX = panelCenterX - (totalW / 2); // 以右侧面板中心居中
-            int wdY = 128; // 垂直位置：位于温度下方，室内温室度上方
+            int wdY = 120; // Align with lunar date (y=120)
             
             // 绘制第一部分 
             u8g2.drawUTF8(wdX, wdY, weatherDetailPart1.c_str());
@@ -1041,7 +1065,7 @@ void displayWeatherDashboard(bool partial_update = false) {
 
             // 4. 室内环境 (基准行)
             if (indoorTemp.length() > 0) {
-                 u8g2.setFont(u8g2_font_wqy14_t_gb2312); // Changed to wqy14
+                 u8g2.setFont(u8g2_font_wqy12_t_gb2312); // Use wqy12
                  
                  // 分割为两部分，在%前增加间距
                  String envPart1 = "T:" + indoorTemp + "°C  H:" + indoorHumi;
@@ -1053,7 +1077,7 @@ void displayWeatherDashboard(bool partial_update = false) {
                  
                  int totalInW = inW1 + inGap + inW2;
                  int inX = panelCenterX - (totalInW / 2);
-                 int inY = 153;
+                 int inY = 140; // Align with solar term (y=140)
                  
                  // 垂直对齐：固定在底部 153 位置
                  u8g2.drawUTF8(inX, inY, envPart1.c_str()); 
@@ -1096,8 +1120,8 @@ void displayWeatherDashboard(bool partial_update = false) {
         if (tempRange == 0) tempRange = 1; // Prevent div/0
 
         // Chart Area
-        int chartTop = startY + 55;   
-        int chartBottom = startY + 85; 
+        int chartTop = startY + 60;   
+        int chartBottom = startY + 90; 
         int chartHeight = chartBottom - chartTop;
 
         for(int i=1; i<currentForecastCount && i<=6; i++) {
@@ -1106,18 +1130,29 @@ void displayWeatherDashboard(bool partial_update = false) {
             int centerX = x1 + ((x2 - x1) / 2);
             xCoords[i] = centerX;
             
-            // Day Icon (Moved UP to startY + 2)
+            // 0. Date (Added above day icon)
+            String dateShort = currentForecast[i].date;
+            if (dateShort.length() >= 10) dateShort = dateShort.substring(5);
+            u8g2.setFont(u8g2_font_wqy12_t_gb2312);
+            int dWidth = u8g2.getUTF8Width(dateShort.c_str());
+            u8g2.drawUTF8(centerX - (dWidth/2), startY , dateShort.c_str());
+
+            // Day Icon (Moved further DOWN to accommodate date)
+            // Was startY + 2. Date ends at startY + 12. Icon needs space.
+            // Let's move icon to startY + 16.
+            int iconY = startY + 16;
+            
             bool dayIconDrawn = false;
             if (currentForecast[i].icon_day.length() > 0) {
                 String iconPath = "/icons/" + currentForecast[i].icon_day + ".bmp";
                 if (LittleFS.exists(iconPath)) {
-                    drawBmp(iconPath, centerX - 16, startY + 2); 
+                    drawBmp(iconPath, centerX - 16, iconY); 
                     dayIconDrawn = true;
                 }
             }
             if (!dayIconDrawn && currentForecast[i].icon_day.length() > 0) {
                  const unsigned char* iconData = getIconData(currentForecast[i].icon_day);
-                 if (iconData) drawIconFromProgmem(iconData, centerX - 18, startY + 2, 36, 36, 1); 
+                 if (iconData) drawIconFromProgmem(iconData, centerX - 18, iconY -7, 36, 36, 1); 
                  dayIconDrawn = true;
             }
             
@@ -1126,7 +1161,7 @@ void displayWeatherDashboard(bool partial_update = false) {
             if (currentForecast[i].icon_night.length() > 0) {
                 String iconPath = "/icons/" + currentForecast[i].icon_night + ".bmp";
                 if (LittleFS.exists(iconPath)) {
-                     drawBmp(iconPath, centerX - 16, startY + 102); 
+                     drawBmp(iconPath, centerX - 16, startY + 106); 
                      nightIconDrawn = true;
                 }
             }
@@ -1134,7 +1169,7 @@ void displayWeatherDashboard(bool partial_update = false) {
             if (!nightIconDrawn && currentForecast[i].icon_night.length() > 0) {
                  const unsigned char* iconData = getIconData(currentForecast[i].icon_night);
                  if (iconData) {
-                     drawIconFromProgmem(iconData, centerX - 18, startY + 102, 36, 36, 1); 
+                     drawIconFromProgmem(iconData, centerX - 18, startY + 106, 36, 36, 1); 
                      nightIconDrawn = true;
                  }
             }
@@ -1142,7 +1177,7 @@ void displayWeatherDashboard(bool partial_update = false) {
             if (!nightIconDrawn) {
                 u8g2.setFont(u8g2_font_open_iconic_weather_4x_t);
                 char nightIconStr[2] = {getIconChar(currentForecast[i].cond_night), 0};
-                u8g2.drawUTF8(centerX - 16, startY + 130, nightIconStr); // 102+28 approx
+                u8g2.drawUTF8(centerX - 16, startY + 134, nightIconStr); // 106+28 approx
             }
 
             if (i < 6) paint_gfx.drawFastVLine(x2, 160, 140, 1);
@@ -1172,7 +1207,7 @@ void displayWeatherDashboard(bool partial_update = false) {
                  
                  String lStr = String(lows[i]);
                  int lw = u8g2.getUTF8Width(lStr.c_str());
-                 u8g2.drawUTF8(xCoords[i] - lw/2, yL1 + 14, lStr.c_str());
+                 u8g2.drawUTF8(xCoords[i] - lw/2, yL1 + 12, lStr.c_str());
                  
                  // Handle last point (i+1) in the last iteration
                  if (i == count - 1 || i == 5) {
@@ -1185,7 +1220,7 @@ void displayWeatherDashboard(bool partial_update = false) {
                      
                      String lStr2 = String(lows[i+1]);
                      int lw2 = u8g2.getUTF8Width(lStr2.c_str());
-                     u8g2.drawUTF8(xCoords[i+1] - lw2/2, yL2 + 14, lStr2.c_str());
+                     u8g2.drawUTF8(xCoords[i+1] - lw2/2, yL2 + 12, lStr2.c_str());
                  }
             }
         }
@@ -1834,11 +1869,29 @@ void setup() {
   
   if (strlen(config.wifi_ssid) > 0) {
       WiFi.mode(WIFI_STA);
+      
+      // Static IP Config
+      if (config.use_static_ip) {
+          IPAddress ip, gw, mask, dns;
+          if (ip.fromString(config.static_ip) && gw.fromString(config.static_gw) && mask.fromString(config.static_mask)) {
+               if (strlen(config.static_dns) > 0) dns.fromString(config.static_dns);
+               else dns.fromString("8.8.8.8");
+               
+               if (!WiFi.config(ip, gw, mask, dns)) {
+                   Serial.println("STA Failed to configure");
+               } else {
+                   Serial.println("Static IP Configured");
+               }
+          } else {
+              Serial.println("Invalid Static IP Config");
+          }
+      }
+
       WiFi.begin(config.wifi_ssid, config.wifi_pass);
       
       Serial.print("Connecting to WiFi");
       int retry = 0;
-      while (WiFi.status() != WL_CONNECTED && retry < 30) { // 15 seconds
+      while (WiFi.status() != WL_CONNECTED && retry < 60) { // Increased to 30 seconds (was 15s)
           delay(500);
           Serial.print(".");
           retry++;
@@ -1888,7 +1941,7 @@ void setup() {
   */
   
   // Setup MQTT
-  if (strlen(config.mqtt_server) > 0) {
+  if (strlen(config.mqtt_server) > 0 && WiFi.status() == WL_CONNECTED) {
       client.setServer(config.mqtt_server, config.mqtt_port);
       client.setCallback(mqttCallback);
       client.setBufferSize(4096); // Increase buffer for large JSON

@@ -22,6 +22,10 @@ String processor(const String& var) {
   if(var == "FULL_REFRESH") return String(config.full_refresh_period);
   if(var == "DAY_START") return String(config.day_start_hour);
   if(var == "DAY_END") return String(config.day_end_hour);
+  if(var == "STATIC_IP") return String(config.static_ip);
+  if(var == "STATIC_GW") return String(config.static_gw);
+  if(var == "STATIC_MASK") return String(config.static_mask);
+  if(var == "STATIC_DNS") return String(config.static_dns);
   if(var == "BUILD_DATE") return String(build_date);
   if(var == "BUILD_TIME") return String(build_time);
   return String();
@@ -52,6 +56,13 @@ void handleRoot() {
   html.replace("%DAY_START%", String(config.day_start_hour));
   html.replace("%DAY_END%", String(config.day_end_hour));
   
+  // Static IP
+  html.replace("%USE_STATIC_IP%", config.use_static_ip ? "checked" : "");
+  html.replace("%STATIC_IP%", String(config.static_ip));
+  html.replace("%STATIC_GW%", String(config.static_gw));
+  html.replace("%STATIC_MASK%", String(config.static_mask));
+  html.replace("%STATIC_DNS%", String(config.static_dns));
+
   // Handle Radio Button State
   if (config.invert_display) {
       html.replace("%INVERT_0%", "");
@@ -187,8 +198,18 @@ void handleSaveConfig() {
   if (server.hasArg("full_refresh_period")) config.full_refresh_period = server.arg("full_refresh_period").toInt();
   if (server.hasArg("day_start_hour")) config.day_start_hour = server.arg("day_start_hour").toInt();
   if (server.hasArg("day_end_hour")) config.day_end_hour = server.arg("day_end_hour").toInt();
-  if (server.hasArg("invert_display")) config.invert_display = (server.arg("invert_display") == "1");
   
+  if (server.hasArg("invert_display")) config.invert_display = (server.arg("invert_display") == "1");
+
+  // Static IP Handling
+  if (server.hasArg("use_static_ip")) config.use_static_ip = true;
+  else config.use_static_ip = false; // Checkbox unchecked means false
+
+  if (server.hasArg("static_ip")) strlcpy(config.static_ip, server.arg("static_ip").c_str(), sizeof(config.static_ip));
+  if (server.hasArg("static_gw")) strlcpy(config.static_gw, server.arg("static_gw").c_str(), sizeof(config.static_gw));
+  if (server.hasArg("static_mask")) strlcpy(config.static_mask, server.arg("static_mask").c_str(), sizeof(config.static_mask));
+  if (server.hasArg("static_dns")) strlcpy(config.static_dns, server.arg("static_dns").c_str(), sizeof(config.static_dns));
+
   saveConfig();
   
   server.send(200, "text/html", "<html><body><h1>Configuration Saved</h1><p>Device is restarting...</p><a href='/'>Back</a></body></html>");
