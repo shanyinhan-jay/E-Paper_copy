@@ -1161,7 +1161,7 @@ void displayWeatherDashboard(bool partial_update = false) {
             if (currentForecast[i].icon_night.length() > 0) {
                 String iconPath = "/icons/" + currentForecast[i].icon_night + ".bmp";
                 if (LittleFS.exists(iconPath)) {
-                     drawBmp(iconPath, centerX - 16, startY + 106); 
+                     drawBmp(iconPath, centerX - 16, startY + 104);   
                      nightIconDrawn = true;
                 }
             }
@@ -1169,7 +1169,7 @@ void displayWeatherDashboard(bool partial_update = false) {
             if (!nightIconDrawn && currentForecast[i].icon_night.length() > 0) {
                  const unsigned char* iconData = getIconData(currentForecast[i].icon_night);
                  if (iconData) {
-                     drawIconFromProgmem(iconData, centerX - 18, startY + 106, 36, 36, 1); 
+                     drawIconFromProgmem(iconData, centerX - 18, startY + 104, 36, 36, 1); 
                      nightIconDrawn = true;
                  }
             }
@@ -1177,7 +1177,7 @@ void displayWeatherDashboard(bool partial_update = false) {
             if (!nightIconDrawn) {
                 u8g2.setFont(u8g2_font_open_iconic_weather_4x_t);
                 char nightIconStr[2] = {getIconChar(currentForecast[i].cond_night), 0};
-                u8g2.drawUTF8(centerX - 16, startY + 134, nightIconStr); // 106+28 approx
+                u8g2.drawUTF8(centerX - 16, startY + 132, nightIconStr); // 104+28 approx
             }
 
             if (i < 6) paint_gfx.drawFastVLine(x2, 160, 140, 1);
