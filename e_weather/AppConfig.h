@@ -15,9 +15,12 @@ struct Config {
   char mqtt_calendar_topic[64] = "epd/calendar";
   char mqtt_shift_topic[64] = "epd/shift";
   char mqtt_air_quality_topic[64] = "epd/air_quality";
-  char ntp_server[64] = "ntp1.aliyun.com";
-  char ntp_server_2[64] = "ntp2.aliyun.com";
-  int full_refresh_period = 0; // minutes, 0 = disabled
+  char mqtt_unified_topic[64] = "epd/unified"; // New unified topic
+  char mqtt_request_topic[64] = "epd/weatherrequest"; // New request topic
+  char ntp_server[64] = "ntp.aliyun.com";
+  char ntp_server_2[64] = "ntp.tencent.com";
+  int full_refresh_period = 10; // minutes, 0 = disabled
+  int request_interval = 30; // minutes, 0 = disabled
   int day_start_hour = 6;
   int day_end_hour = 18;
   bool invert_display = false;

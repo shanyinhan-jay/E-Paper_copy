@@ -12,6 +12,7 @@ extern Config config;
 extern WebServer server;extern const char* build_date;
 extern const char* build_time;
 extern void saveConfig();
+extern void handleMqttConfig();
 extern void displayMessage(String text);
 extern void displayWeatherDashboard(bool partial_update);
 extern void displayCalendarPage(bool partial_update);
@@ -172,6 +173,18 @@ const char INDEX_HTML_TEMPLATE[] PROGMEM = R"rawliteral(
             <input type='text' name='static_dns' value='%STATIC_DNS%' placeholder="DNS Server">
         </div>
         
+        <h3>Refresh Settings (Minutes)</h3>
+        <div class="grid-2-col">
+            <div>
+                <label>Full Refresh Period</label>
+                <input type='number' name='full_refresh_period' value='%FULL_REFRESH%' placeholder="0 = Disabled">
+            </div>
+            <div>
+                <label>Request Interval</label>
+                <input type='number' name='request_interval' value='%REQUEST_INTERVAL%' placeholder="0 = Disabled">
+            </div>
+        </div>
+
         <h3>MQTT Broker</h3>
         <div class="grid-2-col">
             <input type='text' name='mqtt_server' value='%MQTT_SERVER%' placeholder="Broker Address">
@@ -179,28 +192,8 @@ const char INDEX_HTML_TEMPLATE[] PROGMEM = R"rawliteral(
             <input type='text' name='mqtt_user' value='%MQTT_USER%' placeholder="User (Optional)">
             <input type='password' name='mqtt_pass' value='%MQTT_PASS%' placeholder="Password (Optional)">
         </div>
-        
-        <h3>MQTT Topics</h3>
-        <div class="grid-2-col">
-          <input type='text' name='mqtt_topic' value='%MQTT_TOPIC%' placeholder="Text Topic">
-          <input type='text' name='mqtt_weather_topic' value='%MQTT_WEATHER%' placeholder="Weather Topic">
-          <input type='text' name='mqtt_date_topic' value='%MQTT_DATE%' placeholder="Date Topic">
-          <input type='text' name='mqtt_env_topic' value='%MQTT_ENV%' placeholder="Environment Topic">
-          <input type='text' name='mqtt_calendar_topic' value='%MQTT_CALENDAR%' placeholder="Calendar Topic">
-          <input type='text' name='mqtt_shift_topic' value='%MQTT_SHIFT%' placeholder="Shift Topic">
-          <input type='text' name='mqtt_air_quality_topic' value='%MQTT_AQI%' placeholder="AQI Topic">
-        </div>
-        
-        <h3>NTP Servers</h3>
-        <div class="grid-2-col">
-            <input type='text' name='ntp_server' value='%NTP_SERVER%' placeholder="Primary NTP Server">
-            <input type='text' name='ntp_server_2' value='%NTP_SERVER_2%' placeholder="Secondary NTP Server">
-        </div>
 
-        <h3>Full Refresh Period (Minutes)</h3>
-        <div class="grid-2-col">
-            <input type='number' name='full_refresh_period' value='%FULL_REFRESH%' placeholder="0 = Disabled">
-        </div>
+        <a href="/mqtt_config" class="btn-group" style="display:block; text-align:center; background:#2563eb; color:white; padding:10px; border-radius:6px; margin:15px 0;">Configure MQTT Topics</a>
 
         <h3>Day/Night Switch Time (Hour 0-23)</h3>
         <div class="grid-2-col">
@@ -294,8 +287,88 @@ const char FILE_MANAGER_HTML_TEMPLATE[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 
+const char MQTT_CONFIG_HTML_TEMPLATE[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <title>MQTT Configuration</title>
+  %CSS%
+  <style>
+    .topic-desc { font-size: 0.85em; color: var(--text-light); margin-top: -10px; margin-bottom: 15px; display: block; }
+    code { background: #e5e7eb; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+    pre { background: #f3f4f6; padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 0.85em; border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h2>MQTT Topics Configuration</h2>
+      <form action='/saveConfig' method='POST'>
+        
+        <h3>Unified Topic (Recommended)</h3>
+        <input type='text' name='mqtt_unified_topic' value='%MQTT_UNIFIED%' placeholder="epd/unified">
+        <span class="topic-desc">
+          Single topic for all data. JSON format:
+          <pre>
+{
+  "date": { "solar": "...", "lunar": "..." },
+  "weather": [ { "temp": "...", "icon": "..." } ],
+  "env": { "temp": "...", "humi": "..." },
+  "air": { "pm2p5": "...", "category": "..." }
+}</pre>
+        </span>
+
+        <h3>Weather Topic</h3>
+        <input type='text' name='mqtt_weather_topic' value='%MQTT_WEATHER%' placeholder="epd/weather">
+        <span class="topic-desc">JSON: <code>[  { "date": "2023-10-27", "temp": "22/15",  "textDay": "晴", "iconDay": "100", "textNight": "晴", "iconNight": "150", "windDir": "西北风", "windScale": "3" }, ...]</code></span>
+        <h3>Date/Calendar Topic</h3>
+        <input type='text' name='mqtt_date_topic' value='%MQTT_DATE%' placeholder="epd/date">
+        <span class="topic-desc">JSON: <code>{"阳历日期":"...", "农历日期":"...", "星期":"...", "节气信息":"..."}</code></span>
+
+        <h3>Environment Topic</h3>
+        <input type='text' name='mqtt_env_topic' value='%MQTT_ENV%' placeholder="epd/env">
+        <span class="topic-desc">JSON: <code>{"temp":"25.5", "humi":"60"}</code></span>
+
+        <h3>Air Quality Topic</h3>
+        <input type='text' name='mqtt_air_quality_topic' value='%MQTT_AQI%' placeholder="epd/air_quality">
+        <span class="topic-desc">JSON: <code>{"pm2p5":"25", "category":"Good"}</code></span>
+
+        <h3>Calendar Events Topic</h3>
+        <input type='text' name='mqtt_calendar_topic' value='%MQTT_CALENDAR%' placeholder="epd/calendar">
+        <span class="topic-desc">JSON: <code>{"events":[{"start":"...", "summary":"..."}]}</code></span>
+
+        <h3>Shift Schedule Topic</h3>
+        <input type='text' name='mqtt_shift_topic' value='%MQTT_SHIFT%' placeholder="epd/shift">
+        <span class="topic-desc">JSON: <code>{"date":"...", "shift":"..."}</code> or Array</span>
+
+        <h3>Text Message Topic</h3>
+        <input type='text' name='mqtt_topic' value='%MQTT_TOPIC%' placeholder="epd/text">
+        <span class="topic-desc">Simple text string to display directly on screen.</span>
+
+        <h3>Periodic Request Topic</h3>
+        <input type='text' name='mqtt_request_topic' value='%MQTT_REQUEST%' placeholder="epd/weatherrequest">
+        <span class="topic-desc">The device publishes "get" to this topic every N minutes (configured in Request Interval). Subscribe to this topic in Node-RED to trigger data push.</span>
+
+        <div class="btn-group" style="display: flex; gap: 10px;">
+            <button type="button" onclick="window.location.href='/'" style="background:#6b7280; flex:1; padding:12px; font-size:16px;">Cancel</button>
+            <button type="submit" style="background:#2563eb; flex:1; padding:12px; font-size:16px;">Save & Restart</button>
+        </div>
+      </form>
+    </div>
+    
+    <div class="footer">
+      <a href='/'>&laquo; Back to Home</a>
+    </div>
+  </div>
+</body>
+</html>
+)rawliteral";
+
 // Function Declarations
 void handleRoot();
+void handleMqttConfig();
 void handleFileManager();
 void handleUpload();
 void handleDelete();

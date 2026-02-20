@@ -19,7 +19,10 @@ String processor(const String& var) {
   if(var == "MQTT_CALENDAR") return String(config.mqtt_calendar_topic);
   if(var == "MQTT_SHIFT") return String(config.mqtt_shift_topic);
   if(var == "MQTT_AQI") return String(config.mqtt_air_quality_topic);
+  if(var == "MQTT_UNIFIED") return String(config.mqtt_unified_topic);
+  if(var == "MQTT_REQUEST") return String(config.mqtt_request_topic);
   if(var == "FULL_REFRESH") return String(config.full_refresh_period);
+  if(var == "REQUEST_INTERVAL") return String(config.request_interval);
   if(var == "DAY_START") return String(config.day_start_hour);
   if(var == "DAY_END") return String(config.day_end_hour);
   if(var == "STATIC_IP") return String(config.static_ip);
@@ -50,9 +53,12 @@ void handleRoot() {
   html.replace("%MQTT_CALENDAR%", String(config.mqtt_calendar_topic));
   html.replace("%MQTT_SHIFT%", String(config.mqtt_shift_topic));
   html.replace("%MQTT_AQI%", String(config.mqtt_air_quality_topic));
+  html.replace("%MQTT_UNIFIED%", String(config.mqtt_unified_topic));
+  html.replace("%MQTT_REQUEST%", String(config.mqtt_request_topic));
   html.replace("%NTP_SERVER%", String(config.ntp_server));
   html.replace("%NTP_SERVER_2%", String(config.ntp_server_2));
   html.replace("%FULL_REFRESH%", String(config.full_refresh_period));
+  html.replace("%REQUEST_INTERVAL%", String(config.request_interval));
   html.replace("%DAY_START%", String(config.day_start_hour));
   html.replace("%DAY_END%", String(config.day_end_hour));
   
@@ -74,6 +80,23 @@ void handleRoot() {
   
   html.replace("%BUILD_DATE%", String(build_date));
   html.replace("%BUILD_TIME%", String(build_time));
+  
+  server.send(200, "text/html", html);
+}
+
+void handleMqttConfig() {
+  String html = MQTT_CONFIG_HTML_TEMPLATE;
+  html.replace("%CSS%", COMMON_CSS);
+  
+  html.replace("%MQTT_TOPIC%", String(config.mqtt_topic));
+  html.replace("%MQTT_WEATHER%", String(config.mqtt_weather_topic));
+  html.replace("%MQTT_DATE%", String(config.mqtt_date_topic));
+  html.replace("%MQTT_ENV%", String(config.mqtt_env_topic));
+  html.replace("%MQTT_CALENDAR%", String(config.mqtt_calendar_topic));
+  html.replace("%MQTT_SHIFT%", String(config.mqtt_shift_topic));
+  html.replace("%MQTT_AQI%", String(config.mqtt_air_quality_topic));
+  html.replace("%MQTT_UNIFIED%", String(config.mqtt_unified_topic));
+  html.replace("%MQTT_REQUEST%", String(config.mqtt_request_topic));
   
   server.send(200, "text/html", html);
 }
@@ -193,9 +216,12 @@ void handleSaveConfig() {
   if (server.hasArg("mqtt_calendar_topic")) strlcpy(config.mqtt_calendar_topic, server.arg("mqtt_calendar_topic").c_str(), sizeof(config.mqtt_calendar_topic));
   if (server.hasArg("mqtt_shift_topic")) strlcpy(config.mqtt_shift_topic, server.arg("mqtt_shift_topic").c_str(), sizeof(config.mqtt_shift_topic));
   if (server.hasArg("mqtt_air_quality_topic")) strlcpy(config.mqtt_air_quality_topic, server.arg("mqtt_air_quality_topic").c_str(), sizeof(config.mqtt_air_quality_topic));
+  if (server.hasArg("mqtt_unified_topic")) strlcpy(config.mqtt_unified_topic, server.arg("mqtt_unified_topic").c_str(), sizeof(config.mqtt_unified_topic));
+  if (server.hasArg("mqtt_request_topic")) strlcpy(config.mqtt_request_topic, server.arg("mqtt_request_topic").c_str(), sizeof(config.mqtt_request_topic));
   if (server.hasArg("ntp_server")) strlcpy(config.ntp_server, server.arg("ntp_server").c_str(), sizeof(config.ntp_server));
   if (server.hasArg("ntp_server_2")) strlcpy(config.ntp_server_2, server.arg("ntp_server_2").c_str(), sizeof(config.ntp_server_2));
   if (server.hasArg("full_refresh_period")) config.full_refresh_period = server.arg("full_refresh_period").toInt();
+  if (server.hasArg("request_interval")) config.request_interval = server.arg("request_interval").toInt();
   if (server.hasArg("day_start_hour")) config.day_start_hour = server.arg("day_start_hour").toInt();
   if (server.hasArg("day_end_hour")) config.day_end_hour = server.arg("day_end_hour").toInt();
   

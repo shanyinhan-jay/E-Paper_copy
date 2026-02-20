@@ -230,9 +230,12 @@ void loadConfig() {
           strlcpy(config.mqtt_calendar_topic, doc["mqtt_calendar_topic"] | "epd/calendar", sizeof(config.mqtt_calendar_topic));
           strlcpy(config.mqtt_shift_topic, doc["mqtt_shift_topic"] | "epd/shift", sizeof(config.mqtt_shift_topic));
           strlcpy(config.mqtt_air_quality_topic, doc["mqtt_air_quality_topic"] | "epd/air_quality", sizeof(config.mqtt_air_quality_topic));
-          strlcpy(config.ntp_server, doc["ntp_server"] | "ntp.aliyun.com", sizeof(config.ntp_server));
-          strlcpy(config.ntp_server_2, doc["ntp_server_2"] | "ntp.tencent.com", sizeof(config.ntp_server_2));
+          strlcpy(config.mqtt_unified_topic, doc["mqtt_unified_topic"] | "epd/unified", sizeof(config.mqtt_unified_topic));
+          strlcpy(config.mqtt_request_topic, doc["mqtt_request_topic"] | "epd/weatherrequest", sizeof(config.mqtt_request_topic));
+          strlcpy(config.ntp_server, doc["ntp_server"] | "ntp1.aliyun.com", sizeof(config.ntp_server));
+          strlcpy(config.ntp_server_2, doc["ntp_server_2"] | "ntp2.aliyun.com", sizeof(config.ntp_server_2));
           config.full_refresh_period = doc["full_refresh_period"] | 0;
+          config.request_interval = doc["request_interval"] | 30;
           config.day_start_hour = doc["day_start_hour"] | 6;
           config.day_end_hour = doc["day_end_hour"] | 18;
           config.invert_display = doc["invert_display"] | false;
@@ -276,9 +279,12 @@ void saveConfig() {
   doc["mqtt_calendar_topic"] = config.mqtt_calendar_topic;
   doc["mqtt_shift_topic"] = config.mqtt_shift_topic;
   doc["mqtt_air_quality_topic"] = config.mqtt_air_quality_topic;
+  doc["mqtt_unified_topic"] = config.mqtt_unified_topic;
+  doc["mqtt_request_topic"] = config.mqtt_request_topic;
   doc["ntp_server"] = config.ntp_server;
   doc["ntp_server_2"] = config.ntp_server_2;
   doc["full_refresh_period"] = config.full_refresh_period;
+  doc["request_interval"] = config.request_interval;
   doc["day_start_hour"] = config.day_start_hour;
   doc["day_end_hour"] = config.day_end_hour;
   doc["invert_display"] = config.invert_display;
@@ -1245,6 +1251,86 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print("] Length: ");
   Serial.println(length);
   
+  if (strcmp(topic, config.mqtt_unified_topic) == 0) {
+      Serial.println("Unified message received");
+      JsonDocument doc;
+      DeserializationError error = deserializeJson(doc, (char*)payload, length);
+      if (!error) {
+          // 1. Parse Date Info
+          if (doc.containsKey("date")) {
+              JsonObject dateObj = doc["date"];
+              if (dateObj.containsKey("solar")) solarDate = dateObj["solar"].as<String>();
+              if (dateObj.containsKey("week")) weekDay = dateObj["week"].as<String>();
+              if (dateObj.containsKey("lunar")) lunarDate = dateObj["lunar"].as<String>();
+              if (dateObj.containsKey("term")) termInfo = dateObj["term"].as<String>();
+              updateDatePending = true;
+          }
+          
+          // 2. Parse Weather Info
+          if (doc.containsKey("weather")) {
+              JsonArray forecastArr = doc["weather"].as<JsonArray>();
+              int count = 0;
+              for (JsonVariant v : forecastArr) {
+                  if (count >= 7) break;
+                  
+                  if (v.containsKey("temp")) currentForecast[count].temp = v["temp"].as<String>();
+                  
+                  // Icon Day
+                  if (v.containsKey("icon")) currentForecast[count].icon_day = v["icon"].as<String>();
+                  else if (v.containsKey("iconDay")) currentForecast[count].icon_day = v["iconDay"].as<String>();
+                  else if (v.containsKey("icon_day")) currentForecast[count].icon_day = v["icon_day"].as<String>();
+                  
+                  // Icon Night
+                  if (v.containsKey("iconNight")) currentForecast[count].icon_night = v["iconNight"].as<String>();
+                  else if (v.containsKey("icon_night")) currentForecast[count].icon_night = v["icon_night"].as<String>();
+
+                  // Condition Day
+                  if (v.containsKey("cond")) currentForecast[count].cond_day = v["cond"].as<String>();
+                  else if (v.containsKey("textDay")) currentForecast[count].cond_day = v["textDay"].as<String>();
+                  else if (v.containsKey("text")) currentForecast[count].cond_day = v["text"].as<String>();
+                  else if (v.containsKey("weather")) currentForecast[count].cond_day = v["weather"].as<String>();
+                  
+                  // Condition Night
+                  if (v.containsKey("textNight")) currentForecast[count].cond_night = v["textNight"].as<String>();
+                  else if (v.containsKey("text_night")) currentForecast[count].cond_night = v["text_night"].as<String>();
+                  else if (v.containsKey("cond_night")) currentForecast[count].cond_night = v["cond_night"].as<String>();
+                  
+                  if (v.containsKey("windDir")) currentForecast[count].wind_dir = v["windDir"].as<String>();
+                  if (v.containsKey("windScale")) currentForecast[count].wind_sc = v["windScale"].as<String>();
+                  if (v.containsKey("date")) currentForecast[count].date = v["date"].as<String>();
+                  
+                  count++;
+              }
+              currentForecastCount = count;
+              updateWeatherPending = true;
+          }
+          
+          // 3. Parse Indoor Environment
+          if (doc.containsKey("env")) {
+              JsonObject envObj = doc["env"];
+              if (envObj.containsKey("temp")) indoorTemp = envObj["temp"].as<String>();
+              if (envObj.containsKey("humi")) indoorHumi = envObj["humi"].as<String>();
+              updateEnvPending = true;
+          }
+          
+          // 4. Parse Air Quality
+          if (doc.containsKey("air")) {
+              JsonObject airObj = doc["air"];
+              if (airObj.containsKey("pm2p5")) airPm2p5 = airObj["pm2p5"].as<String>();
+              if (airObj.containsKey("category")) airCategory = airObj["category"].as<String>();
+              updateWeatherPending = true;
+          }
+          
+          lastUpdateTrigger = millis();
+          Serial.println("Unified update processed");
+      } else {
+          Serial.print("JSON Error (Unified): ");
+          Serial.println(error.c_str());
+          displayMessage("Unified JSON Error:\n" + String(error.c_str()));
+      }
+      return;
+  }
+
   if (strcmp(topic, config.mqtt_date_topic) == 0) {
       JsonDocument doc;
       DeserializationError error = deserializeJson(doc, (char*)payload, length);
@@ -1792,6 +1878,13 @@ bool reconnect() {
           }
       }
       
+      if (strlen(config.mqtt_unified_topic) > 0) {
+          if (client.subscribe(config.mqtt_unified_topic)) {
+              Serial.print("Subscribed to: ");
+              Serial.println(config.mqtt_unified_topic);
+          }
+      }
+      
       // Send Weather Request on Connect
       client.loop();
       delay(100);
@@ -2016,12 +2109,13 @@ void setup() {
           client.subscribe(config.mqtt_calendar_topic);
           client.subscribe(config.mqtt_shift_topic);
           client.subscribe(config.mqtt_air_quality_topic);
+          client.subscribe(config.mqtt_unified_topic); // Add unified topic subscription
           
           client.loop(); // Process incoming messages (e.g. SUBACK)
           delay(100);
 
           // Send Weather Request on Connect
-          if (client.publish("epd/weatherrequest", "get")) {
+          if (client.publish(config.mqtt_request_topic, "get")) {
               Serial.println("Weather Request sent (Setup)");
           } else {
               Serial.println("Weather Request failed (Setup)");
@@ -2039,6 +2133,7 @@ void setup() {
   server.on("/files", handleFileManager);
   server.on("/setText", handleSetText);
   server.on("/saveConfig", handleSaveConfig);
+  server.on("/mqtt_config", handleMqttConfig);
   server.on("/reboot", HTTP_POST, handleReboot);
   server.on("/update", HTTP_GET, handleUpdate);
   server.on("/update", HTTP_POST, []() {
@@ -2260,6 +2355,16 @@ void loop() {
           }
       }
   }
+
+  // Periodic Request Timer
+   static unsigned long lastRequestTime = millis();
+   if (config.request_interval > 0 && client.connected()) {
+       if (millis() - lastRequestTime > (unsigned long)config.request_interval * 60 * 1000) { // Convert minutes to ms
+           lastRequestTime = millis();
+           Serial.println("Sending Periodic Weather Request");
+           client.publish(config.mqtt_request_topic, "get");
+       }
+   }
   
   // Check for minute change
   int currentMinute = timeClient.getMinutes();
