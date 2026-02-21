@@ -59,7 +59,7 @@ const char* DEFAULT_AP_SSID_BASE = "EPD-Display";
 String ap_ssid = DEFAULT_AP_SSID_BASE;
 
 #define MAX_CALENDAR_EVENTS 20
-#define MAX_SHIFT_EVENTS 30
+#define MAX_SHIFT_EVENTS 100
 
 Config config;
 
@@ -895,6 +895,9 @@ void displayWeatherDashboard(bool partial_update = false) {
         // --- Layout ---
         // 顶部垂直分割线 (x=200, y=5-145)
         paint_gfx.drawFastVLine(200, 5, 135, 1); 
+
+        // Draw Thermometer Icon (Top Right)
+        drawIconFromProgmem(gImage_tem, 375, 5, 20, 36, 1);
         
         // === LEFT SIDE (Date & Time) ===
         u8g2.setFont(u8g2_font_logisoso50_tf); 
@@ -1394,28 +1397,34 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       DeserializationError error = deserializeJson(doc, (char*)payload, length);
       
       if (!error) {
-          shiftEvents.clear();
-          Serial.println("shiftEvents cleared");
+          // Parse into temporary vector first
+          std::vector<ShiftEvent> newShifts;
+          
+          // Use current time as default Year/Month context for parsing simple dates
+          time_t now = timeClient.getEpochTime();
+          struct tm *t_now = gmtime(&now);
+          int currentYear = t_now->tm_year + 1900;
+          int currentMonth = t_now->tm_mon + 1;
+          
+          // Helper lambda to add to temp list
+          auto addTempShift = [&](int y, int m, int d, String c) {
+              ShiftEvent ev;
+              ev.year = y; ev.month = m; ev.day = d; ev.content = c;
+              newShifts.push_back(ev);
+          };
           
           // 1. Handle Array: ["2026-02-17", "Shift"] or [{"date":"...", "shift":"..."}]
           if (doc.is<JsonArray>()) {
                JsonArray arr = doc.as<JsonArray>();
-               // Check if it's a simple [date, content] pair
                if (arr.size() == 2 && arr[0].is<String>() && arr[1].is<String>()) {
                     String dateStr = arr[0].as<String>();
                     int year, month, day;
                     if (sscanf(dateStr.c_str(), "%d-%d-%d", &year, &month, &day) == 3) {
-                        ShiftEvent ev;
-                        ev.year = year; ev.month = month; ev.day = day;
-                        ev.content = arr[1].as<String>();
-                        shiftEvents.push_back(ev);
+                        addTempShift(year, month, day, arr[1].as<String>());
                     }
                } 
                else {
-                   // Iterate array items
                    for (JsonVariant v : arr) {
-                       if (shiftEvents.size() >= MAX_SHIFT_EVENTS) break;
-                       
                        if (v.is<JsonObject>()) {
                            JsonObject obj = v.as<JsonObject>();
                            String dateStr = "";
@@ -1425,13 +1434,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                            if (dateStr.length() > 0) {
                                int year, month, day;
                                if (sscanf(dateStr.c_str(), "%d-%d-%d", &year, &month, &day) == 3) {
-                                   ShiftEvent ev;
-                                   ev.year = year; ev.month = month; ev.day = day;
-                                   if (obj.containsKey("shift")) ev.content = obj["shift"].as<String>();
-                                   else if (obj.containsKey("content")) ev.content = obj["content"].as<String>();
-                                   else if (obj.containsKey("summary")) ev.content = obj["summary"].as<String>();
+                                   String content = "";
+                                   if (obj.containsKey("shift")) content = obj["shift"].as<String>();
+                                   else if (obj.containsKey("content")) content = obj["content"].as<String>();
+                                   else if (obj.containsKey("summary")) content = obj["summary"].as<String>();
                                    
-                                   if (ev.content.length() > 0) shiftEvents.push_back(ev);
+                                   if (content.length() > 0) addTempShift(year, month, day, content);
                                }
                            }
                        }
@@ -1441,81 +1449,49 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
           // 2. Handle Object
           else if (doc.is<JsonObject>()) {
                JsonObject root = doc.as<JsonObject>();
-               
-               // Use current time as default Year/Month context
-               time_t now = timeClient.getEpochTime();
-               struct tm * t = gmtime(&now);
-               int currentYear = t->tm_year + 1900;
-               int currentMonth = t->tm_mon + 1;
-               
-               // First, try to iterate ALL keys to find dates like "2026-02-16" OR "16"
                bool foundDateKeys = false;
                for (JsonPair kv : root) {
-                   if (shiftEvents.size() >= MAX_SHIFT_EVENTS) break;
-
                    String rawKey = kv.key().c_str();
-                   // Sanitize key: keep only 0-9 and -
                    String key = "";
                    for (unsigned int i = 0; i < rawKey.length(); i++) {
                        char c = rawKey[i];
-                       if (isdigit(c) || c == '-') {
-                           key += c;
-                       }
+                       if (isdigit(c) || c == '-') key += c;
                    }
 
                    int year, month, day;
-                   
-                   // Check if key is a full date format YYYY-MM-DD
                    if (sscanf(key.c_str(), "%d-%d-%d", &year, &month, &day) == 3) {
                        if (kv.value().is<String>()) {
-                           ShiftEvent ev;
-                           ev.year = year;
-                           ev.month = month;
-                           ev.day = day;
-                           ev.content = kv.value().as<String>();
-                           if (ev.content.length() > 0) {
-                               shiftEvents.push_back(ev);
+                           String content = kv.value().as<String>();
+                           if (content.length() > 0) {
+                               addTempShift(year, month, day, content);
                                foundDateKeys = true;
-                               // Update context for subsequent simplified dates
                                currentYear = year;
                                currentMonth = month;
-                               Serial.printf("Parsed Shift (Full): %d-%d-%d = %s\n", year, month, day, ev.content.c_str());
                            }
                        }
                    } 
-                   // Check if key is a simplified date format "DD" (1-31)
                    else if (sscanf(key.c_str(), "%d", &day) == 1) {
-                       // Ensure parsed day is valid and key doesn't contain '-' (to avoid partial full-date matches)
                        if (key.indexOf('-') == -1 && day >= 1 && day <= 31 && kv.value().is<String>()) {
-                           ShiftEvent ev;
-                           ev.year = currentYear;
-                           ev.month = currentMonth;
-                           ev.day = day;
-                           ev.content = kv.value().as<String>();
-                           if (ev.content.length() > 0) {
-                               shiftEvents.push_back(ev);
+                           String content = kv.value().as<String>();
+                           if (content.length() > 0) {
+                               addTempShift(currentYear, currentMonth, day, content);
                                foundDateKeys = true;
-                               Serial.printf("Parsed Shift (Simple): %d-%d-%d = %s\n", currentYear, currentMonth, day, ev.content.c_str());
                            }
                        }
                    }
                }
                
-               // If no date keys found, check for other structures
                if (!foundDateKeys) {
-                   // Check for {"date": "...", "shift": "..."} single object
                    if (root.containsKey("date") || root.containsKey("day")) {
                         String dateStr = root.containsKey("date") ? root["date"].as<String>() : root["day"].as<String>();
                         int year, month, day;
                         if (sscanf(dateStr.c_str(), "%d-%d-%d", &year, &month, &day) == 3) {
-                            ShiftEvent ev;
-                            ev.year = year; ev.month = month; ev.day = day;
-                            if (root.containsKey("shift")) ev.content = root["shift"].as<String>();
-                            else if (root.containsKey("content")) ev.content = root["content"].as<String>();
-                            if (ev.content.length() > 0) shiftEvents.push_back(ev);
+                            String content = "";
+                            if (root.containsKey("shift")) content = root["shift"].as<String>();
+                            else if (root.containsKey("content")) content = root["content"].as<String>();
+                            if (content.length() > 0) addTempShift(year, month, day, content);
                         }
                    }
-                   // Check for "shifts" or "data" array
                    else {
                        JsonArray shifts;
                        if (root.containsKey("shifts")) shifts = root["shifts"];
@@ -1523,7 +1499,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                        
                        if (!shifts.isNull()) {
                            for (JsonVariant v : shifts) {
-                               if (shiftEvents.size() >= MAX_SHIFT_EVENTS) break;
                                if (v.is<JsonObject>()) {
                                    JsonObject obj = v.as<JsonObject>();
                                    String dateStr = "";
@@ -1531,10 +1506,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                                    
                                    int year, month, day;
                                    if (sscanf(dateStr.c_str(), "%d-%d-%d", &year, &month, &day) == 3) {
-                                       ShiftEvent ev;
-                                       ev.year = year; ev.month = month; ev.day = day;
-                                       if (obj.containsKey("shift")) ev.content = obj["shift"].as<String>();
-                                       if (ev.content.length() > 0) shiftEvents.push_back(ev);
+                                       String content = "";
+                                       if (obj.containsKey("shift")) content = obj["shift"].as<String>();
+                                       if (content.length() > 0) addTempShift(year, month, day, content);
                                    }
                                }
                            }
@@ -1542,8 +1516,49 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                    }
                }
           }
+
+          // MERGE LOGIC: 
+          // 1. Find min date in newShifts
+          // 2. Remove all existing shifts >= min date
+          // 3. Add all new shifts
           
-          Serial.print("Total shifts parsed: ");
+          if (!newShifts.empty()) {
+              // Find min date
+              ShiftEvent minEv = newShifts[0];
+              for(const auto& ev : newShifts) {
+                  if (ev.year < minEv.year) minEv = ev;
+                  else if (ev.year == minEv.year && ev.month < minEv.month) minEv = ev;
+                  else if (ev.year == minEv.year && ev.month == minEv.month && ev.day < minEv.day) minEv = ev;
+              }
+              
+              // Remove existing >= minDate
+              auto it = std::remove_if(shiftEvents.begin(), shiftEvents.end(), [&](const ShiftEvent& ev) {
+                  if (ev.year > minEv.year) return true;
+                  if (ev.year == minEv.year && ev.month > minEv.month) return true;
+                  if (ev.year == minEv.year && ev.month == minEv.month && ev.day >= minEv.day) return true;
+                  return false;
+              });
+              shiftEvents.erase(it, shiftEvents.end());
+              
+              // Add new shifts
+              shiftEvents.insert(shiftEvents.end(), newShifts.begin(), newShifts.end());
+              
+              Serial.printf("Merged %d new shifts. Min Date: %d-%d-%d\n", newShifts.size(), minEv.year, minEv.month, minEv.day);
+          }
+          
+          // Sort events by date
+          std::sort(shiftEvents.begin(), shiftEvents.end(), [](const ShiftEvent& a, const ShiftEvent& b) {
+              if (a.year != b.year) return a.year < b.year;
+              if (a.month != b.month) return a.month < b.month;
+              return a.day < b.day;
+          });
+          
+          // Enforce Max Size (Remove Oldest)
+          while (shiftEvents.size() > MAX_SHIFT_EVENTS) {
+              shiftEvents.erase(shiftEvents.begin());
+          }
+          
+          Serial.print("Total shifts stored: ");
           Serial.println(shiftEvents.size());
           
           updateCalendarPending = true;
