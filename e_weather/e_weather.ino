@@ -1983,75 +1983,90 @@ void setup() {
   Serial.println(config.mqtt_air_quality_topic);
 
   // Serial2 Init & Send Ready
+    // Serial2 Init & Send Ready
   Serial2.begin(SERIAL2_BAUD, SERIAL_8N1, SERIAL2_RX, SERIAL2_TX);
   delay(50);
   Serial2.println("ready");
-  Serial.println("Serial2: sent ready");  // 现在这行一定会出现在日志里
+  Serial.println("Serial2: sent ready");
 
-// Wait for time JSON from Serial2
-unsigned long s2Wait = millis();
-bool timeReceived = false;
-while (millis() - s2Wait < 10000) { // Wait up to 10s
+  // Wait for time JSON from Serial2 (up to 10s)
+  String serial2Buffer = "";
+  unsigned long s2Wait = millis();
+  bool timeReceived = false;
+
+  while (millis() - s2Wait < 10000) {
     while (Serial2.available()) {
-        char c = Serial2.read();
-        if (c == '\n') {
-            serial2Buffer.trim();
-            Serial.print("Serial2 received: ");
-            Serial.println(serial2Buffer);
-            
-            JsonDocument timeDoc;
-            DeserializationError terr = deserializeJson(timeDoc, serial2Buffer);
-            if (!terr && timeDoc.containsKey("time")) {
-                String timeStr = timeDoc["time"].as<String>(); // e.g. "14:30"
-                // Parse HH:MM
-                int colon = timeStr.indexOf(':');
-                if (colon > 0) {
-                    int minute = timeStr.substring(colon + 1, colon + 3).toInt();
-                    if (minute == 0) {
-                        // 整点：走正常流程，不做特殊处理
-                        Serial.println("Serial2: on the hour, normal flow");
-                    } else {
-                        // 非整点：局部刷新时间后发送bye
-                        // 此时WiFi/MQTT尚未连接，需要初始化屏幕
-                        DEV_Module_Init();
-                        Local_EPD_4IN2_Init_Partial();
-                        
- /*                      UWORD Imagesize = ((EPD_4IN2_WIDTH % 8 == 0) ? (EPD_4IN2_WIDTH / 8) : (EPD_4IN2_WIDTH / 8 + 1)) * EPD_4IN2_HEIGHT;
-                        if (BlackImage == NULL) {
-                            BlackImage = (UBYTE *)malloc(Imagesize);
-                        }
-*/
-                        if (BlackImage != NULL) {
-                            UWORD InitColor = config.invert_display ? BLACK : WHITE;
-                            Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, InitColor);
-                            Paint_SelectImage(BlackImage);
-//                            Paint_Clear(InitColor);
-                            for (int row = 0; row < 80; row++) {
-                                 for (int col = 0; col < 200; col++) {
-                                     Paint_SetPixel(col, row, WHITE);
-                                }
-                            }
-                            
-                            u8g2.begin(paint_gfx);
-                            u8g2.setFontMode(1);
-                            u8g2.setForegroundColor(1);
-                            u8g2.setBackgroundColor(0);
+      char c = Serial2.read();
+      if (c == '\n') {
+        serial2Buffer.trim();
+        Serial.print("Serial2 received: ");
+        Serial.println(serial2Buffer);
 
-                            u8g2.setFont(u8g2_font_logisoso50_tf);
-                            String dispTime = timeStr.substring(0, 5); // HH:MM
-                            int tWidth = u8g2.getUTF8Width(dispTime.c_str());
-                            int timeX = 100 - (tWidth / 2);
-                            u8g2.drawUTF8(timeX, 65, dispTime.c_str());
-                            
-                            // 局部刷新时间区域（左侧面板，x:0-200, y:0-145）
-                            Local_EPD_4IN2_PartialDisplay(0, 0, 200, 80, BlackImage);
-                            Local_EPD_4IN2_Sleep();
-                        }
-                Serial2.println("bye");
-                Serial.println("Serial2: sent bye");
-                return;
+        JsonDocument timeDoc;
+        DeserializationError terr = deserializeJson(timeDoc, serial2Buffer);
 
-}
+        if (!terr && timeDoc.containsKey("time")) {
+          String timeStr = timeDoc["time"].as<String>();
+          int colon = timeStr.indexOf(':');
+
+          if (colon > 0) {
+            int minute = timeStr.substring(colon + 1, colon + 3).toInt();
+
+            if (minute == 0) {
+              // 整点：继续正常流程
+              Serial.println("Serial2: on the hour, normal flow");
+            } else {
+              // 非整点：局部刷新时间后直接结束
+              DEV_Module_Init();
+              Local_EPD_4IN2_Init_Partial();
+
+              if (BlackImage != NULL) {
+                UWORD InitColor = config.invert_display ? BLACK : WHITE;
+                Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, InitColor);
+                Paint_SelectImage(BlackImage);
+
+                // 清除时间区域
+                for (int row = 0; row < 80; row++) {
+                  for (int col = 0; col < 200; col++) {
+                    Paint_SetPixel(col, row, WHITE);
+                  }
+                }
+
+                u8g2.begin(paint_gfx);
+                u8g2.setFontMode(1);
+                u8g2.setForegroundColor(1);
+                u8g2.setBackgroundColor(0);
+                u8g2.setFont(u8g2_font_logisoso50_tf);
+
+                String dispTime = timeStr.substring(0, 5);
+                int tWidth = u8g2.getUTF8Width(dispTime.c_str());
+                int timeX = 100 - (tWidth / 2);
+                u8g2.drawUTF8(timeX, 65, dispTime.c_str());
+
+                Local_EPD_4IN2_PartialDisplay(0, 0, 200, 80, BlackImage);
+                Local_EPD_4IN2_Sleep();
+              }
+
+              Serial2.println("bye");
+              Serial.println("Serial2: sent bye (non-hour)");
+              return; // 跳过后续所有流程
+            } // end if minute != 0
+          } // end if colon > 0
+
+          timeReceived = true;
+        } // end if !terr
+
+        serial2Buffer = "";
+        break;
+      } else {
+        serial2Buffer += c;
+      }
+    } // end while Serial2.available
+
+    if (timeReceived) break;
+    delay(10);
+  } // end while millis
+
 if (!timeReceived) {
     Serial.println("Serial2: no time received within timeout");
 }
