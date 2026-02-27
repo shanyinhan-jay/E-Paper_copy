@@ -2016,22 +2016,28 @@ while (millis() - s2Wait < 10000) { // Wait up to 10s
                         DEV_Module_Init();
                         Local_EPD_4IN2_Init_Partial();
                         
-                        UWORD Imagesize = ((EPD_4IN2_WIDTH % 8 == 0) ? (EPD_4IN2_WIDTH / 8) : (EPD_4IN2_WIDTH / 8 + 1)) * EPD_4IN2_HEIGHT;
+ /*                      UWORD Imagesize = ((EPD_4IN2_WIDTH % 8 == 0) ? (EPD_4IN2_WIDTH / 8) : (EPD_4IN2_WIDTH / 8 + 1)) * EPD_4IN2_HEIGHT;
                         if (BlackImage == NULL) {
                             BlackImage = (UBYTE *)malloc(Imagesize);
                         }
+*/
                         if (BlackImage != NULL) {
                             UWORD InitColor = config.invert_display ? BLACK : WHITE;
                             Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, InitColor);
                             Paint_SelectImage(BlackImage);
-                            Paint_Clear(InitColor);
+//                            Paint_Clear(InitColor);
+                            for (int row = 0; row < 80; row++) {
+                                 for (int col = 0; col < 200; col++) {
+                                     Paint_SetPixel(col, row, WHITE);
+                                }
+                            }
                             
                             u8g2.begin(paint_gfx);
                             u8g2.setFontMode(1);
                             u8g2.setForegroundColor(1);
                             u8g2.setBackgroundColor(0);
+
                             u8g2.setFont(u8g2_font_logisoso50_tf);
-                            
                             String dispTime = timeStr.substring(0, 5); // HH:MM
                             int tWidth = u8g2.getUTF8Width(dispTime.c_str());
                             int timeX = 100 - (tWidth / 2);
@@ -2041,21 +2047,10 @@ while (millis() - s2Wait < 10000) { // Wait up to 10s
                             Local_EPD_4IN2_PartialDisplay(0, 0, 200, 80, BlackImage);
                             Local_EPD_4IN2_Sleep();
                         }
-                        Serial.println("Serial2: partial time update done");
-                    }
-                }
                 Serial2.println("bye");
                 Serial.println("Serial2: sent bye");
-                timeReceived = true;
-            }
-            serial2Buffer = "";
-            break;
-        } else {
-            serial2Buffer += c;
-        }
-    }
-    if (timeReceived) break;
-    delay(10);
+                return;
+
 }
 if (!timeReceived) {
     Serial.println("Serial2: no time received within timeout");
