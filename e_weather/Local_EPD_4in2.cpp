@@ -485,12 +485,12 @@ void Local_EPD_4IN2_PartialDisplay(UWORD X_start,UWORD Y_start,UWORD X_end,UWORD
 	EPD_4IN2_TurnOnDisplay();
 }
 
-/*
-void Local_EPD_4IN2_4GrayDisplay(const UBYTE *Image)
+void Local_EPD_4IN2_ResetPartialData(void)
 {
-    // ...
+    // 重置为全白状态（存的是反相值，白色0xFF反相=0x00）
+    memset(EPD_4IN2_Partial_DATA, 0x00, sizeof(EPD_4IN2_Partial_DATA));
+    Serial.println("Partial DATA reset to white");
 }
-*/
 /******************************************************************************
 function :	Enter sleep mode
 parameter:

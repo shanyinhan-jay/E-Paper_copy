@@ -2019,24 +2019,33 @@ void setup() {
             } else {
               // 非整点：局部刷新时间后直接结束
               DEV_Module_Init();
-              Local_EPD_4IN2_Init_Partial();
 
-              if (BlackImage != NULL) {
-                UWORD Imagesize = ((EPD_4IN2_WIDTH % 8 == 0) ? 
-                                  (EPD_4IN2_WIDTH / 8) : 
-                                  (EPD_4IN2_WIDTH / 8 + 1)) * EPD_4IN2_HEIGHT;
-                memset(BlackImage, 0xFF, Imagesize); // 0xFF = 全白
+              UWORD Imagesize = ((EPD_4IN2_WIDTH % 8 == 0) ?
+                     (EPD_4IN2_WIDTH / 8) :
+                     (EPD_4IN2_WIDTH / 8 + 1)) * EPD_4IN2_HEIGHT;
 
+             if (BlackImage != NULL) {
+                Local_EPD_4IN2_ResetPartialData();
+                memset(BlackImage, 0xFF, Imagesize);
                 Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, WHITE);
                 Paint_SelectImage(BlackImage);
 
+                 Local_EPD_4IN2_Init_Partial();
+                 // 只刷时间所在的矩形区域（x:0-200, y:0-80），其他区域不传送
+                 Local_EPD_4IN2_PartialDisplay(0, 0, 200, 80, BlackImage);
+                 delay(500);
+
+                // === 第二次局部刷新：在同一区域写入新时间 ===
+                memset(BlackImage, 0xFF, Imagesize);
+                Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, WHITE);
+                Paint_SelectImage(BlackImage);
 
                 u8g2.begin(paint_gfx);
                 u8g2.setFontMode(1);
                 u8g2.setForegroundColor(1);
                 u8g2.setBackgroundColor(0);
-                u8g2.setFont(u8g2_font_logisoso50_tf);
 
+                u8g2.setFont(u8g2_font_logisoso50_tf);
                 String dispTime = timeStr.substring(0, 5);
                 int tWidth = u8g2.getUTF8Width(dispTime.c_str());
                 int timeX = 100 - (tWidth / 2);

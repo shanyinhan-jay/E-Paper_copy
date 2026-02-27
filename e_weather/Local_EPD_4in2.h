@@ -19,6 +19,7 @@
 #define EPD_4IN2_WIDTH       400
 #define EPD_4IN2_HEIGHT      300
 
+void Local_EPD_4IN2_ResetPartialData(void);  // 新增
 void Local_EPD_4IN2_Init(void);
 void Local_EPD_4IN2_Init_Fast(void);
 void Local_EPD_4IN2_Init_Partial(void);
