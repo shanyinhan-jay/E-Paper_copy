@@ -1,4 +1,5 @@
 /*
+
 - SCK : 13
 - MOSI : 14
 - CS : 15
@@ -2021,16 +2022,14 @@ void setup() {
               Local_EPD_4IN2_Init_Partial();
 
               if (BlackImage != NULL) {
-                UWORD InitColor = config.invert_display ? BLACK : WHITE;
-                Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, InitColor);
+                UWORD Imagesize = ((EPD_4IN2_WIDTH % 8 == 0) ? 
+                                  (EPD_4IN2_WIDTH / 8) : 
+                                  (EPD_4IN2_WIDTH / 8 + 1)) * EPD_4IN2_HEIGHT;
+                memset(BlackImage, 0xFF, Imagesize); // 0xFF = 全白
+
+                Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, WHITE);
                 Paint_SelectImage(BlackImage);
 
-                // 清除时间区域
-                for (int row = 0; row < 80; row++) {
-                  for (int col = 0; col < 200; col++) {
-                    Paint_SetPixel(col, row, WHITE);
-                  }
-                }
 
                 u8g2.begin(paint_gfx);
                 u8g2.setFontMode(1);
@@ -2043,7 +2042,7 @@ void setup() {
                 int timeX = 100 - (tWidth / 2);
                 u8g2.drawUTF8(timeX, 65, dispTime.c_str());
 
-                Local_EPD_4IN2_PartialDisplay(0, 0, 200, 80, BlackImage);
+                 Local_EPD_4IN2_PartialDisplay(0, 0, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, BlackImage);
                 Local_EPD_4IN2_Sleep();
               }
 
@@ -2303,15 +2302,12 @@ if (!timeReceived) {
   button.attachLongPressStart(handleButtonLongPress);
 
   // Initial Display
-  String statusMsg = "";
+// Initial Display - screen message suppressed
   if (WiFi.status() == WL_CONNECTED) {
-      statusMsg = "WiFi: " + String(config.wifi_ssid) + "\nIP: " + WiFi.localIP().toString() + "\nConfigure via Web UI (IP)";
       wifiWarningShown = false;
   } else {
-      statusMsg = "AP: " + String(ap_ssid) + "\nIP: 192.168.4.1\nConfigure via Web UI";
-      wifiWarningShown = true; // Prevent loop from overwriting AP message with "WiFi Lost"
+      wifiWarningShown = true;
   }
-  displayMessage(statusMsg);
 }
 
 void loop() {
@@ -2323,7 +2319,7 @@ void loop() {
       if (WiFi.status() != WL_CONNECTED) {
           if (!wifiWarningShown) {
               Serial.println("WiFi Lost, showing warning");
-              displayMessage("WiFi Connection Lost\nAP Enabled: " + ap_ssid);
+ //             displayMessage("WiFi Connection Lost\nAP Enabled: " + ap_ssid);
               wifiWarningShown = true;
               
               // Ensure AP is active
@@ -2336,9 +2332,9 @@ void loop() {
       } else {
           if (wifiWarningShown) {
               Serial.println("WiFi Restored");
-              displayMessage("WiFi Connected!");
+ //             displayMessage("WiFi Connected!");
               wifiWarningShown = false;
-              delay(2000); 
+ //             delay(2000); 
           }
       }
   }
@@ -2352,8 +2348,8 @@ void loop() {
                 WiFi.mode(WIFI_AP_STA);
                 WiFi.softAP(ap_ssid.c_str());
            }
-           String msg = "MQTT Connect Failed\nConfig via AP: " + ap_ssid + "\nOr IP: " + WiFi.localIP().toString();
-           displayMessage(msg);
+ //          String msg = "MQTT Connect Failed\nConfig via AP: " + ap_ssid + "\nOr IP: " + WiFi.localIP().toString();
+ //          displayMessage(msg);
            mqttWarningShown = true;
       }
       // Do NOT return here, allow server.handleClient() to run in loop
@@ -2369,12 +2365,12 @@ void loop() {
                   lastMqttRetry = now;
                   
                   if (!mqttWarningShown) {
-                       displayMessage("MQTT Connection Lost\nReconnecting...");
+//                       displayMessage("MQTT Connection Lost\nReconnecting...");
                        mqttWarningShown = true;
                   }
                   
                   if (reconnect()) {
-                       displayMessage("MQTT Connected!\nFetching Weather...");
+ //                      displayMessage("MQTT Connected!\nFetching Weather...");
                        mqttWarningShown = false;
                        // Disable AP if reconnected
                        WiFi.softAPdisconnect(true);
