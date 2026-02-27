@@ -49,6 +49,8 @@ extern const uint8_t u8g2_font_logisoso30_tf[] U8X8_PROGMEM;
 #define SERIAL2_RX 16
 #define SERIAL2_TX 17
 String serial2Buffer = "";
+bool serial2ReadyHandled = false; // 是否已处理过非整点时间
+bool waitingForSerial2Time = false; // 是否在等待串口2时间
 
 const char* build_date = __DATE__;
 const char* build_time = __TIME__;
@@ -1989,96 +1991,7 @@ void setup() {
   delay(50);
   Serial2.println("ready");
   Serial.println("Serial2: sent ready");
-
-  // Wait for time JSON from Serial2 (up to 10s)
-  String serial2Buffer = "";
-  unsigned long s2Wait = millis();
-  bool timeReceived = false;
-
-  while (millis() - s2Wait < 10000) {
-    while (Serial2.available()) {
-      char c = Serial2.read();
-      if (c == '\n') {
-        serial2Buffer.trim();
-        Serial.print("Serial2 received: ");
-        Serial.println(serial2Buffer);
-
-        JsonDocument timeDoc;
-        DeserializationError terr = deserializeJson(timeDoc, serial2Buffer);
-
-        if (!terr && timeDoc.containsKey("time")) {
-          String timeStr = timeDoc["time"].as<String>();
-          int colon = timeStr.indexOf(':');
-
-          if (colon > 0) {
-            int minute = timeStr.substring(colon + 1, colon + 3).toInt();
-
-            if (minute == 0) {
-              // 整点：继续正常流程
-              Serial.println("Serial2: on the hour, normal flow");
-            } else {
-              // 非整点：局部刷新时间后直接结束
-              DEV_Module_Init();
-
-              UWORD Imagesize = ((EPD_4IN2_WIDTH % 8 == 0) ?
-                     (EPD_4IN2_WIDTH / 8) :
-                     (EPD_4IN2_WIDTH / 8 + 1)) * EPD_4IN2_HEIGHT;
-
-             if (BlackImage != NULL) {
-                Local_EPD_4IN2_ResetPartialData();
-                memset(BlackImage, 0xFF, Imagesize);
-                Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, WHITE);
-                Paint_SelectImage(BlackImage);
-
-                 Local_EPD_4IN2_Init_Partial();
-                 // 只刷时间所在的矩形区域（x:0-200, y:0-80），其他区域不传送
-                 Local_EPD_4IN2_PartialDisplay(0, 0, 200, 80, BlackImage);
-                 delay(500);
-
-                // === 第二次局部刷新：在同一区域写入新时间 ===
-                memset(BlackImage, 0xFF, Imagesize);
-                Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, WHITE);
-                Paint_SelectImage(BlackImage);
-
-                u8g2.begin(paint_gfx);
-                u8g2.setFontMode(1);
-                u8g2.setForegroundColor(1);
-                u8g2.setBackgroundColor(0);
-
-                u8g2.setFont(u8g2_font_logisoso50_tf);
-                String dispTime = timeStr.substring(0, 5);
-                int tWidth = u8g2.getUTF8Width(dispTime.c_str());
-                int timeX = 100 - (tWidth / 2);
-                u8g2.drawUTF8(timeX, 65, dispTime.c_str());
-
-                 Local_EPD_4IN2_PartialDisplay(0, 0, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, BlackImage);
-                Local_EPD_4IN2_Sleep();
-              }
-
-              Serial2.println("bye");
-              Serial.println("Serial2: sent bye (non-hour)");
-              return; // 跳过后续所有流程
-            } // end if minute != 0
-          } // end if colon > 0
-
-          timeReceived = true;
-        } // end if !terr
-
-        serial2Buffer = "";
-        break;
-      } else {
-        serial2Buffer += c;
-      }
-    } // end while Serial2.available
-
-    if (timeReceived) break;
-    delay(10);
-  } // end while millis
-
-if (!timeReceived) {
-    Serial.println("Serial2: no time received within timeout");
-}
-
+  waitingForSerial2Time = true;
 
 
 
@@ -2394,6 +2307,72 @@ void loop() {
           }
       } else {
           client.loop();
+ // 处理串口2时间更新（在天气页面已经全刷过之后才处理）
+  if (waitingForSerial2Time && !serial2ReadyHandled) {
+    while (Serial2.available()) {
+      char c = Serial2.read();
+      if (c == '\n') {
+        serial2Buffer.trim();
+        Serial.print("Serial2 received: ");
+        Serial.println(serial2Buffer);
+
+        JsonDocument timeDoc;
+        DeserializationError terr = deserializeJson(timeDoc, serial2Buffer);
+
+        if (!terr && timeDoc.containsKey("time")) {
+          String timeStr = timeDoc["time"].as<String>();
+          int colon = timeStr.indexOf(':');
+
+          if (colon > 0) {
+            int minute = timeStr.substring(colon + 1, colon + 3).toInt();
+
+            if (minute != 0) {
+              // 非整点：此时 Partial_DATA 已经由上面的 displayWeatherDashboard 正确填充
+              // 直接局部刷新时间区域
+              UWORD Imagesize = ((EPD_4IN2_WIDTH % 8 == 0) ?
+                                 (EPD_4IN2_WIDTH / 8) :
+                                 (EPD_4IN2_WIDTH / 8 + 1)) * EPD_4IN2_HEIGHT;
+
+              if (BlackImage != NULL) {
+                memset(BlackImage, 0xFF, Imagesize);
+                Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, WHITE);
+                Paint_SelectImage(BlackImage);
+
+                u8g2.begin(paint_gfx);
+                u8g2.setFontMode(1);
+                u8g2.setForegroundColor(1);
+                u8g2.setBackgroundColor(0);
+                u8g2.setFont(u8g2_font_logisoso50_tf);
+
+                String dispTime = timeStr.substring(0, 5);
+                int tWidth = u8g2.getUTF8Width(dispTime.c_str());
+                int timeX = 100 - (tWidth / 2);
+                u8g2.drawUTF8(timeX, 65, dispTime.c_str());
+
+                DEV_Module_Init();
+                Local_EPD_4IN2_Init_Partial();
+                Local_EPD_4IN2_PartialDisplay(0, 0, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, BlackImage);
+                Local_EPD_4IN2_Sleep();
+
+                Serial.println("Serial2: partial time update done (loop)");
+              }
+            }
+          }
+
+          Serial2.println("bye");
+          Serial.println("Serial2: sent bye");
+          serial2ReadyHandled = true;
+          waitingForSerial2Time = false;
+        }
+        serial2Buffer = "";
+      } else {
+        serial2Buffer += c;
+      }
+    }
+  }
+
+
+
           mqttGiveUp = false; // Reset give up flag on successful connection
   
   // Handle deferred updates
