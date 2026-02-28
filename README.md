@@ -1,4 +1,5 @@
 # ESP32 4.2寸 墨水屏天气时钟 (E-Paper Weather Station)
+不再更新，新项目https://github.com/shanyinhan-jay/E-Paper_weather
 
 基于 ESP32 和 4.2英寸电子墨水屏 (E-Paper Display) 开发的智能天气与信息看板。支持通过 MQTT 协议接入 Home Assistant、Node-RED 等智能家居平台，实现高度可定制的数据展示。
 
